@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.4 - 2026-04-08
+- Add a "Last Week" time period tab.
+
 ## 0.1.3 - 2026-02-03
 - Add preview image metadata for the extension listing.
 

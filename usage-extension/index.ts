@@ -2,7 +2,7 @@
  * /usage - Usage statistics dashboard
  *
  * Shows an inline view with usage stats grouped by provider.
- * - Tab cycles: Today → This Week → All Time
+ * - Tab cycles: Today → This Week → Last Week → All Time
  * - Arrow keys navigate providers
  * - Enter expands/collapses to show models
  */
@@ -52,10 +52,11 @@ interface TimeFilteredStats {
 interface UsageData {
 	today: TimeFilteredStats;
 	thisWeek: TimeFilteredStats;
+	lastWeek: TimeFilteredStats;
 	allTime: TimeFilteredStats;
 }
 
-type TabName = "today" | "thisWeek" | "allTime";
+type TabName = "today" | "thisWeek" | "lastWeek" | "allTime";
 
 // =============================================================================
 // Column Configuration
@@ -245,9 +246,15 @@ async function collectUsageData(signal?: AbortSignal): Promise<UsageData | null>
 	startOfWeek.setHours(0, 0, 0, 0);
 	const weekStartMs = startOfWeek.getTime();
 
+	// Start of last week (previous Monday 00:00)
+	const startOfLastWeek = new Date(startOfWeek);
+	startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+	const lastWeekStartMs = startOfLastWeek.getTime();
+
 	const data: UsageData = {
 		today: emptyTimeFilteredStats(),
 		thisWeek: emptyTimeFilteredStats(),
+		lastWeek: emptyTimeFilteredStats(),
 		allTime: emptyTimeFilteredStats(),
 	};
 
@@ -262,13 +269,17 @@ async function collectUsageData(signal?: AbortSignal): Promise<UsageData | null>
 		if (!parsed) continue;
 
 		const { sessionId, messages } = parsed;
-		const sessionContributed = { today: false, thisWeek: false, allTime: false };
+		const sessionContributed = { today: false, thisWeek: false, lastWeek: false, allTime: false };
 
 		for (const msg of messages) {
 			if (signal?.aborted) return null;
 			const periods: TabName[] = ["allTime"];
 			if (msg.timestamp >= todayMs) periods.push("today");
-			if (msg.timestamp >= weekStartMs) periods.push("thisWeek");
+			if (msg.timestamp >= weekStartMs) {
+				periods.push("thisWeek");
+			} else if (msg.timestamp >= lastWeekStartMs) {
+				periods.push("lastWeek");
+			}
 
 			const tokens = {
 				// Total = input + output only. cacheRead/cacheWrite are tracked separately.
@@ -313,6 +324,7 @@ async function collectUsageData(signal?: AbortSignal): Promise<UsageData | null>
 		// Count unique sessions per period
 		if (sessionContributed.today) data.today.totals.sessions++;
 		if (sessionContributed.thisWeek) data.thisWeek.totals.sessions++;
+		if (sessionContributed.lastWeek) data.lastWeek.totals.sessions++;
 		if (sessionContributed.allTime) data.allTime.totals.sessions++;
 
 		await new Promise<void>((resolve) => setImmediate(resolve));
@@ -367,10 +379,11 @@ function padRight(s: string, len: number): string {
 const TAB_LABELS: Record<TabName, string> = {
 	today: "Today",
 	thisWeek: "This Week",
+	lastWeek: "Last Week",
 	allTime: "All Time",
 };
 
-const TAB_ORDER: TabName[] = ["today", "thisWeek", "allTime"];
+const TAB_ORDER: TabName[] = ["today", "thisWeek", "lastWeek", "allTime"];
 
 class UsageComponent {
 	private activeTab: TabName = "allTime";
